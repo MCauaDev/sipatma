@@ -1,0 +1,671 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Quiz SIPATMA - Volkswagen Caminhões e Ônibus</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/tone/14.7.77/Tone.js"></script>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;700;900&display=swap" rel="stylesheet">
+    <style>
+        body {
+            font-family: 'Inter', sans-serif;
+            overflow: hidden;
+            background-color: #0d1a2e;
+        }
+        /* Estilos para o semáforo */
+        .traffic-light {
+            background: #2d2d2d;
+            border-radius: 20px;
+            padding: 10px;
+            box-shadow: 0 5px 15px rgba(0,0,0,0.3);
+            display: inline-block;
+        }
+        .light {
+            width: 50px;
+            height: 50px;
+            border-radius: 50%;
+            background: #1a1a1a;
+            margin: 8px;
+            transition: background-color 0.3s ease, box-shadow 0.3s ease;
+        }
+        #start-screen .light { width: 60px; height: 60px; }
+        #quiz-screen .traffic-light { padding: 15px; }
+        #quiz-screen .light { width: 80px; height: 80px; margin: 12px; }
+
+        .light.red { background-color: #ff4d4d; box-shadow: 0 0 35px #ff4d4d, 0 0 15px #ff1a1a inset; }
+        .light.yellow { background-color: #ffd700; box-shadow: 0 0 35px #ffd700, 0 0 15px #ffbf00 inset; }
+        .light.green { background-color: #4dff4d; box-shadow: 0 0 35px #4dff4d, 0 0 15px #1aff1a inset; }
+        
+        /* Animações */
+        @keyframes fadeIn { from { opacity: 0; transform: scale(0.9); } to { opacity: 1; transform: scale(1); } }
+        @keyframes fadeOut { from { opacity: 1; transform: scale(1); } to { opacity: 0; transform: scale(0.9); } }
+        .fade-in { animation: fadeIn 0.6s cubic-bezier(0.25, 0.46, 0.45, 0.94) forwards; }
+        .fade-out { animation: fadeOut 0.6s cubic-bezier(0.25, 0.46, 0.45, 0.94) forwards; }
+
+        @keyframes slideInFromLeft { from { transform: translateX(-150%); } to { transform: translateX(0); } }
+        .slide-in-left { animation: slideInFromLeft 0.8s cubic-bezier(0.25, 0.46, 0.45, 0.94) forwards; }
+        
+        /* Animação da rua */
+        #street-animation-modal {
+            background: linear-gradient(to bottom, #2c3e50 0%, #4ca1af 60%, #4A4A4A 60%);
+        }
+        @keyframes drive-street { from { background-position-x: 0; } to { background-position-x: -1024px; } }
+        #street-bg {
+            width: 2048px;
+            height: 100%;
+            background: url('data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" width="1024" height="100%"><line x1="0" y1="63%" x2="1024" y2="63%" stroke="%23FFF" stroke-width="4" stroke-dasharray="40 60"/></svg>');
+            animation: drive-street 3s linear infinite;
+        }
+        #background-cars {
+            position: absolute;
+            bottom: 25%;
+            width: 100%;
+            height: 50px;
+        }
+        @keyframes drive-bg-car { 0% { left: 110%; } 100% { left: -20%; } }
+        .bg-car {
+            position: absolute;
+            width: 100px;
+            animation: drive-bg-car linear infinite;
+        }
+
+        @keyframes drive-correct { 
+            0% { left: -20%; transform: translateY(0); } 
+            50% { transform: translateY(-5px); }
+            100% { left: 65%; transform: translateY(0); }
+        }
+        @keyframes drive-wrong {
+            0% { left: -20%; transform: rotate(0deg) translateY(0); }
+            30% { left: 45%; transform: rotate(0deg) translateY(-2px); }
+            35% { transform: rotate(10deg); }
+            40% { left: 40%; transform: rotate(-10deg); }
+            50% { left: 45%; transform: rotate(0deg); }
+            100% { left: 45%; transform: rotate(720deg) scale(0); }
+        }
+        @keyframes screen-shake {
+            0%, 100% { transform: translateX(0); }
+            10%, 30%, 50%, 70%, 90% { transform: translateX(-10px); }
+            20%, 40%, 60%, 80% { transform: translateX(10px); }
+        }
+        .shake { animation: screen-shake 0.4s cubic-bezier(.36,.07,.19,.97) both; }
+        .car-animation-correct { animation: drive-correct 2.5s ease-in-out forwards; }
+        .car-animation-wrong { animation: drive-wrong 3s ease-out forwards; }
+
+        .btn-start, .btn-quiz { transition: all 0.2s ease; }
+        .btn-start:hover, .btn-quiz:hover { transform: scale(1.05); filter: brightness(1.1); }
+        .btn-start:active, .btn-quiz:active { transform: scale(0.98); filter: brightness(0.9); }
+
+        .score-title { text-shadow: 1px 1px 2px rgba(0,0,0,0.2); }
+        
+        #crack-overlay {
+            background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 300 300' xmlns='http://www.w3.org/2000/svg'%3E%3Cpath d='M150 0 L152 148 L300 150 L152 152 L150 300 L148 152 L0 150 L148 148 Z' stroke='rgba(255,255,255,0.7)' stroke-width='2' fill='none' transform='rotate(45 150 150) translate(20 20)'/%3E%3Cpath d='M150 50 L151 149 L250 150 L151 151 L150 250 L149 151 L50 150 L149 149 Z' stroke='rgba(255,255,255,0.5)' stroke-width='1' fill='none' transform='rotate(-25 150 150) translate(-10 -10)'/%3E%3C/svg%3E");
+            background-size: 80%;
+            background-repeat: no-repeat;
+            background-position: center;
+            transition: opacity 0.5s ease-out;
+        }
+        
+        #start-screen {
+            background: #111827;
+            color: white;
+        }
+        @keyframes subtle-pan { 0% { background-position: 0% 50%; } 50% { background-position: 100% 50%; } 100% { background-position: 0% 50%; } }
+        #start-screen-bg {
+            position: absolute;
+            top: 0; left: 0; right: 0; bottom: 0;
+            background: linear-gradient(45deg, #111827, #1f2937, #111827);
+            background-size: 200% 200%;
+            animation: subtle-pan 15s ease infinite;
+            z-index: -1;
+        }
+
+        #quiz-screen {
+            background: linear-gradient(to top, #eef2f3, #8e9eab);
+        }
+        @keyframes winner-pulse-blue { 0%, 100% { background-color: #2563eb; } 50% { background-color: #3b82f6; } }
+        @keyframes winner-pulse-white { 0%, 100% { background-color: #e5e7eb; } 50% { background-color: #f9fafb; } }
+        .winner-pulse-blue { animation: winner-pulse-blue 1s ease-in-out infinite; }
+        .winner-pulse-white { animation: winner-pulse-white 1s ease-in-out infinite; }
+
+        @keyframes drive-off {
+            0% { transform: translateX(0) scale(1); }
+            100% { transform: translateX(200vw) scale(0.5); }
+        }
+        .drive-off-animation {
+            animation: drive-off 3s ease-in forwards;
+        }
+    </style>
+</head>
+<body class="bg-gray-100 text-gray-800">
+
+    <!-- Tela Inicial -->
+    <div id="start-screen" class="w-full h-screen flex flex-col justify-center items-center fade-in p-8 text-center relative">
+        <div id="start-screen-bg"></div>
+        <div class="absolute top-5 right-8">
+            <svg class="h-12" viewBox="0 0 100 40"><rect width="100" height="40" rx="8" fill="#FFF"/><text x="50" y="26" font-size="14" text-anchor="middle" font-weight="bold" fill="#004687">FORMARE</text></svg>
+        </div>
+        <img src="https://logodownload.org/wp-content/uploads/2020/02/volkswagen-caminhoes-e-onibus-logo-4.png" alt="Logo Volkswagen Caminhões e Ônibus" class="h-24 mb-4" onerror="this.onerror=null;this.src='https://w7.pngwing.com/pngs/640/27/png-transparent-volkswagen-group-volkswagen-beetle-car-volkswagen-touareg-decal-emblem-trademark-logo.png';">
+        <h1 class="text-6xl font-black mb-2" style="text-shadow: 0 4px 8px rgba(0,0,0,0.3);">DESAFIO SIPATMA 2025</h1>
+        <p class="text-2xl text-gray-300 mb-10">Quem domina as regras do trânsito?</p>
+        <button id="start-quiz-btn" class="btn-start bg-green-500 text-white font-bold text-3xl py-5 px-16 rounded-lg shadow-lg transform hover:-translate-y-1">
+            COMEÇAR!
+        </button>
+        <footer class="absolute bottom-4 text-gray-400 text-sm">
+            Desenvolvido pelo Formare 2025
+        </footer>
+    </div>
+
+    <!-- Tela do Quiz -->
+    <div id="quiz-screen" class="w-full h-screen hidden flex-col items-center justify-center p-4 relative">
+        <!-- Logos -->
+        <img src="https://logodownload.org/wp-content/uploads/2020/02/volkswagen-caminhoes-e-onibus-logo.png" class="absolute top-5 left-8 h-12" alt="Logo VWCO" onerror="this.onerror=null;this.src='https://w7.pngwing.com/pngs/640/27/png-transparent-volkswagen-group-volkswagen-beetle-car-volkswagen-touareg-decal-emblem-trademark-logo.png';">
+        <div class="absolute top-5 right-8">
+             <svg class="h-12" viewBox="0 0 100 40"><rect width="100" height="40" rx="8" fill="#004687"/><text x="50" y="26" font-size="14" text-anchor="middle" font-weight="bold" fill="#FFF">FORMARE</text></svg>
+        </div>
+        
+        <!-- Placar -->
+        <div class="absolute top-20 w-full flex justify-around px-8">
+            <div class="text-center bg-blue-600 text-white p-4 rounded-lg shadow-xl w-1/3">
+                <h2 class="text-2xl font-black score-title">TIME AZUL</h2>
+                <p id="score-blue" class="text-5xl font-black">0</p>
+            </div>
+            <div class="text-center bg-white text-gray-800 p-4 rounded-lg shadow-xl w-1/3">
+                <h2 class="text-2xl font-black score-title-white">TIME BRANCO</h2>
+                <p id="score-white" class="text-5xl font-black">0</p>
+            </div>
+        </div>
+
+        <!-- Conteúdo Principal do Quiz -->
+        <div class="flex w-full max-w-7xl items-center mt-24">
+            <!-- Semáforo do Quiz -->
+            <div id="quiz-traffic-light-container" class="w-1/3 flex justify-center opacity-0">
+                <div class="traffic-light flex flex-col">
+                    <div id="quiz-light-red" class="light"></div>
+                    <div id="quiz-light-yellow" class="light"></div>
+                    <div id="quiz-light-green" class="light"></div>
+                </div>
+            </div>
+
+            <!-- Área da Pergunta e Respostas -->
+            <div id="question-area" class="w-2/3 text-center pl-8">
+                <div id="timer-display" class="text-7xl font-black text-blue-800 mb-4 h-20"></div>
+                <h2 id="question-text" class="text-5xl font-bold mb-8 min-h-[200px] flex items-center justify-center"></h2>
+                <div id="answers-grid" class="grid grid-cols-2 gap-4 opacity-0 pointer-events-none"></div>
+            </div>
+        </div>
+        
+        <!-- Modais -->
+        <div id="feedback-modal" class="hidden absolute inset-0 bg-black bg-opacity-50 flex justify-center items-center z-30">
+            <p id="feedback-text" class="text-9xl font-black text-white" style="text-shadow: 0 0 20px black;"></p>
+        </div>
+        <div id="scoring-modal" class="hidden absolute inset-0 bg-black bg-opacity-70 flex justify-center items-center z-20">
+            <div class="bg-white p-8 rounded-lg text-center fade-in">
+                <h3 class="text-2xl font-bold mb-4">PONTO PARA A EQUIPE:</h3>
+                <div class="flex gap-4">
+                    <button onclick="assignPoint('blue')" class="btn-quiz bg-blue-600 text-white font-bold py-3 px-8 rounded-lg">TIME AZUL</button>
+                    <button onclick="assignPoint('white')" class="btn-quiz bg-gray-200 text-gray-800 font-bold py-3 px-8 rounded-lg">TIME BRANCO</button>
+                </div>
+            </div>
+        </div>
+        <div id="navigation-modal" class="hidden absolute inset-0 bg-black bg-opacity-70 flex justify-center items-center z-20">
+            <div class="bg-white p-8 rounded-lg text-center fade-in flex flex-col gap-4">
+                <button id="next-question-btn" class="btn-quiz bg-green-500 text-white font-bold py-3 px-8 rounded-lg">PRÓXIMA PERGUNTA</button>
+                <button id="exit-btn" class="btn-quiz bg-red-500 text-white font-bold py-3 px-8 rounded-lg">SAIR</button>
+            </div>
+        </div>
+
+        <!-- Animação da Rua -->
+        <div id="street-animation-modal" class="hidden absolute inset-0 z-10 overflow-hidden">
+            <div id="crack-overlay" class="absolute inset-0 z-20 opacity-0 pointer-events-none"></div>
+            <div id="street-bg"></div>
+            <div id="background-cars">
+                <div class="bg-car" style="animation-duration: 8s; animation-delay: 0s;"><svg viewBox="0 0 120 60"><path d="M98,20 L110,35 L110,48 L100,48 L100,55 L85,55 L85,48 L25,48 L25,55 L10,55 L10,48 L0,48 L0,35 L12,20 L30,20 L40,10 L70,10 L80,20 L98,20 Z" fill="#9ca3af" stroke="#4b5563" stroke-width="1"/></svg></div>
+                <div class="bg-car" style="animation-duration: 12s; animation-delay: 4s;"><svg viewBox="0 0 120 60"><path d="M98,20 L110,35 L110,48 L100,48 L100,55 L85,55 L85,48 L25,48 L25,55 L10,55 L10,48 L0,48 L0,35 L12,20 L30,20 L40,10 L70,10 L80,20 L98,20 Z" fill="#ef4444" stroke="#7f1d1d" stroke-width="1"/></svg></div>
+            </div>
+            <div id="player-car" class="absolute bottom-[20%] w-52 h-auto">
+                <svg viewBox="0 0 120 60"><path d="M98,20 L110,35 L110,48 L100,48 L100,55 L85,55 L85,48 L25,48 L25,55 L10,55 L10,48 L0,48 L0,35 L12,20 L30,20 L40,10 L70,10 L80,20 L98,20 Z" fill="#004687" stroke="#000" stroke-width="1"/><path d="M30,20 L40,10 L70,10 L80,20 L80,35 L30,35 Z" fill="#FFF" stroke="#AAA" stroke-width="1"/><circle cx="17.5" cy="48" r="8" fill="#222"/><circle cx="92.5" cy="48" r="8" fill="#222"/><circle cx="17.5" cy="48" r="4" fill="#DDD"/><circle cx="92.5" cy="48" r="4" fill="#DDD"/><circle cx="60" cy="22" r="5" fill="#FFF" stroke="#004687" stroke-width="1.5"/><path d="M57,22 L63,22 M60,19 L60,25" stroke="#004687" stroke-width="1.5"/></svg>
+            </div>
+            <div id="other-car" class="absolute bottom-[20%] left-[60%] w-52 h-auto opacity-0">
+                 <svg viewBox="0 0 120 60"><path d="M98,20 L110,35 L110,48 L100,48 L100,55 L85,55 L85,48 L25,48 L25,55 L10,55 L10,48 L0,48 L0,35 L12,20 L30,20 L40,10 L70,10 L80,20 L98,20 Z" fill="#c0c0c0" stroke="#000" stroke-width="1"/><path d="M30,20 L40,10 L70,10 L80,20 L80,35 L30,35 Z" fill="#EEE" stroke="#AAA" stroke-width="1"/><circle cx="17.5" cy="48" r="8" fill="#222"/><circle cx="92.5" cy="48" r="8" fill="#222"/><circle cx="17.5" cy="48" r="4" fill="#DDD"/><circle cx="92.5" cy="48" r="4" fill="#DDD"/></svg>
+            </div>
+            <div id="finish-line" class="absolute bottom-[20%] left-[80%] w-32 h-auto opacity-0 transition-transform">
+                <svg viewBox="0 0 100 80"><path d="M10,0 C0,0 0,10 10,10 L90,10 C100,10 100,0 90,0 Z" fill="#f97316"/><path d="M10,10 L10,70 L90,70 L90,10" fill="#fdba74"/><path d="M10,70 C0,70 0,80 10,80 L90,80 C100,80 100,70 90,70 Z" fill="#f97316"/><svg x="25" y="25" width="50" height="30" viewBox="0 0 100 40"><rect width="100" height="40" rx="8" fill="#FFF"/><text x="50" y="26" font-size="14" text-anchor="middle" font-weight="bold" fill="#833c0c">FORMARE</text></svg></svg>
+            </div>
+        </div>
+
+        <!-- Tela de Vencedor -->
+        <div id="winner-screen" class="hidden absolute inset-0 z-40 flex-col justify-center items-center transition-colors duration-1000">
+            <canvas id="confetti-canvas" class="absolute top-0 left-0 w-full h-full"></canvas>
+            <div id="winner-car-container" class="relative">
+                <div id="winner-car" class="w-64 h-auto transition-transform duration-1000 transform scale-0">
+                    <svg viewBox="0 0 120 60"><path d="M98,20 L110,35 L110,48 L100,48 L100,55 L85,55 L85,48 L25,48 L25,55 L10,55 L10,48 L0,48 L0,35 L12,20 L30,20 L40,10 L70,10 L80,20 L98,20 Z" fill="#004687" stroke="#000" stroke-width="1"/><path d="M30,20 L40,10 L70,10 L80,20 L80,35 L30,35 Z" fill="#FFF" stroke="#AAA" stroke-width="1"/><circle cx="17.5" cy="48" r="8" fill="#222"/><circle cx="92.5" cy="48" r="8" fill="#222"/><circle cx="17.5" cy="48" r="4" fill="#DDD"/><circle cx="92.5" cy="48" r="4" fill="#DDD"/><circle cx="60" cy="22" r="5" fill="#FFF" stroke="#004687" stroke-width="1.5"/><path d="M57,22 L63,22 M60,19 L60,25" stroke="#004687" stroke-width="1.5"/></svg>
+                </div>
+            </div>
+            <h2 id="winner-text" class="text-6xl font-black text-white text-center" style="text-shadow: 0 0 20px black;"></h2>
+            <button id="play-again-btn" class="mt-8 btn-quiz bg-white text-black font-bold py-3 px-8 rounded-lg text-2xl opacity-0 transition-opacity duration-500 delay-1000">JOGAR NOVAMENTE</button>
+        </div>
+    </div>
+
+    <script>
+        // --- ELEMENTOS DA UI ---
+        const startScreen = document.getElementById('start-screen');
+        const quizScreen = document.getElementById('quiz-screen');
+        const startQuizBtn = document.getElementById('start-quiz-btn');
+        const scoreBlueEl = document.getElementById('score-blue');
+        const scoreWhiteEl = document.getElementById('score-white');
+        const quizTrafficLightContainer = document.getElementById('quiz-traffic-light-container');
+        const qLightRed = document.getElementById('quiz-light-red');
+        const qLightYellow = document.getElementById('quiz-light-yellow');
+        const qLightGreen = document.getElementById('quiz-light-green');
+        const timerDisplay = document.getElementById('timer-display');
+        const questionText = document.getElementById('question-text');
+        const answersGrid = document.getElementById('answers-grid');
+        const feedbackModal = document.getElementById('feedback-modal');
+        const feedbackText = document.getElementById('feedback-text');
+        const scoringModal = document.getElementById('scoring-modal');
+        const navigationModal = document.getElementById('navigation-modal');
+        const nextQuestionBtn = document.getElementById('next-question-btn');
+        const exitBtn = document.getElementById('exit-btn');
+        const streetAnimationModal = document.getElementById('street-animation-modal');
+        const crackOverlay = document.getElementById('crack-overlay');
+        const playerCar = document.getElementById('player-car');
+        const otherCar = document.getElementById('other-car');
+        const finishLine = document.getElementById('finish-line');
+        const winnerScreen = document.getElementById('winner-screen');
+        const winnerCarContainer = document.getElementById('winner-car-container');
+        const winnerText = document.getElementById('winner-text');
+        const winnerCar = document.getElementById('winner-car');
+        const playAgainBtn = document.getElementById('play-again-btn');
+        const confettiCanvas = document.getElementById('confetti-canvas');
+
+
+        // --- DADOS DO QUIZ ---
+        const WINNING_SCORE = 10;
+        let allQuestions = [
+            // Fáceis
+            { question: "A faixa de pedestres serve para...", answers: ["Enfeitar a via", "Atravessar com segurança", "Estacionar motos", "Ponto de ônibus"], correct: 1 },
+            { question: "Qual o significado da luz amarela do semáforo?", answers: ["Siga em frente", "Atenção, pare se possível", "Pare imediatamente", "Acelere para não pegar o sinal"], correct: 1 },
+            { question: "O cinto de segurança é obrigatório para...", answers: ["Apenas o motorista", "Apenas passageiros da frente", "Todos os ocupantes do veículo", "Apenas em rodovias"], correct: 2 },
+            // Médias
+            { question: "Qual a velocidade máxima em via de trânsito rápido sem sinalização?", answers: ["110 km/h", "80 km/h", "60 km/h", "40 km/h"], correct: 0 },
+            { question: "O que significa a placa R-1 (Parada Obrigatória)?", answers: ["Parar e seguir", "Parar só se vier outro veículo", "Obrigação de parar", "Dar a preferência"], correct: 2 },
+            { question: "Dirigir com apenas uma das mãos é permitido?", answers: ["Nunca", "Sempre", "Ao trocar marcha ou fazer sinais", "Em vias de baixa velocidade"], correct: 2 },
+            { question: "Usar o celular ao dirigir é uma infração...", answers: ["Leve", "Média", "Grave", "Gravíssima"], correct: 3 },
+            { question: "Qual a distância segura do carro da frente?", answers: ["1 metro", "Colado na traseira", "A que permite frear a tempo", "5 metros"], correct: 2 },
+            { question: "O que significa uma linha amarela contínua na pista?", answers: ["Pode ultrapassar", "Proibido ultrapassar nos dois sentidos", "Permitido estacionar", "Ciclofaixa"], correct: 1 },
+            // Difíceis
+            { question: "Estacionar em vaga de deficiente sem credencial é infração...", answers: ["Leve", "Média", "Grave", "Gravíssima com remoção"], correct: 3 },
+            { question: "Crianças menores de 10 anos e que não tenham 1,45m devem ser transportadas...", answers: ["No banco da frente", "No colo do motorista", "No banco de trás com dispositivo", "No porta-malas"], correct: 2 },
+            { question: "Qual a validade máxima da CNH para condutores com menos de 50 anos?", answers: ["1 ano", "3 anos", "5 anos", "10 anos"], correct: 3 },
+            { question: "Deixar de prestar socorro à vítima de acidente é considerado...", answers: ["Apenas falta de educação", "Infração média", "Crime de trânsito", "Infração leve"], correct: 2 },
+            { question: "A calibragem incorreta dos pneus pode causar...", answers: ["Aumento do consumo de combustível", "Melhora na estabilidade", "Nenhum problema", "Desgaste apenas do motor"], correct: 0 },
+        ];
+        let questions = [];
+        let scores = { blue: 0, white: 0 };
+        let intervalId;
+        let soundEnabled = false;
+
+        // --- CONTROLE DE SOM (Tone.js) ---
+        let synth, noiseSynth, tickSynth, metalSynth, fanfare, skidSynth;
+        function setupSounds() {
+            if (soundEnabled) return;
+            Tone.start();
+            synth = new Tone.Synth().toDestination();
+            noiseSynth = new Tone.NoiseSynth({ noise: { type: 'white' }, envelope: { attack: 0.005, decay: 0.2, sustain: 0 } }).toDestination();
+            tickSynth = new Tone.MembraneSynth({ pitchDecay: 0.008, octaves: 2, envelope: { attack: 0.0006, decay: 0.2, sustain: 0 } }).toDestination();
+            metalSynth = new Tone.MetalSynth({ frequency: 150, envelope: { attack: 0.001, decay: 0.4, release: 0.2 }, harmonicity: 5.1, modulationIndex: 32, resonance: 4000, octaves: 1.5 }).toDestination();
+            fanfare = new Tone.PolySynth(Tone.Synth).toDestination();
+            const skidFilter = new Tone.AutoFilter("4n").toDestination().start();
+            skidSynth = new Tone.NoiseSynth({noise: {type: "pink"}, envelope: {attack: 0.2, decay: 0.3, sustain: 0.1}}).connect(skidFilter);
+            soundEnabled = true;
+        }
+        const play = {
+            tick: () => soundEnabled && tickSynth.triggerAttackRelease('C2', '8n', Tone.now()),
+            feedbackCorrect: () => soundEnabled && synth.triggerAttackRelease('G5', '8n', Tone.now()),
+            feedbackWrong: () => soundEnabled && synth.triggerAttackRelease('C3', '4n', Tone.now()),
+            skid: () => soundEnabled && skidSynth.triggerAttackRelease("8n", Tone.now()),
+            crash: () => {
+                if (!soundEnabled) return;
+                noiseSynth.triggerAttackRelease('0.4s', Tone.now());
+                metalSynth.triggerAttack(Tone.now() + 0.05);
+            },
+            accelerate: () => {
+                if (!soundEnabled) return;
+                let freq = 200;
+                const engine = new Tone.Oscillator(freq, "sawtooth").toDestination();
+                engine.volume.value = -20;
+                engine.start();
+                const interval = setInterval(() => {
+                    freq += 50;
+                    if(engine.frequency) engine.frequency.value = freq;
+                    if (freq > 1000) {
+                        clearInterval(interval);
+                        engine.stop("+0.1");
+                    }
+                }, 100);
+            },
+            win: () => {
+                if (!soundEnabled) return;
+                const now = Tone.now();
+                fanfare.triggerAttackRelease(['C4', 'E4', 'G4'], '8n', now);
+                fanfare.triggerAttackRelease(['C5'], '4n', now + 0.2);
+            }
+        };
+
+        // --- LÓGICA DO JOGO ---
+        function shuffleArray(array) {
+            for (let i = array.length - 1; i > 0; i--) {
+                const j = Math.floor(Math.random() * (i + 1));
+                [array[i], array[j]] = [array[j], array[i]];
+            }
+            return array;
+        }
+
+        startQuizBtn.addEventListener('click', () => {
+            setupSounds();
+            startScreen.classList.replace('fade-in', 'fade-out');
+            setTimeout(() => {
+                startScreen.classList.add('hidden');
+                quizScreen.classList.remove('hidden');
+                quizScreen.classList.add('fade-in', 'flex');
+                startQuiz();
+            }, 600);
+        });
+
+        function startQuiz() {
+            questions = shuffleArray([...allQuestions]);
+            scores = { blue: 0, white: 0 };
+            updateScores();
+            loadQuestion();
+        }
+
+        function loadQuestion() {
+            if (questions.length === 0) {
+                questions = shuffleArray([...allQuestions]);
+            }
+            const currentQuestion = questions.pop();
+
+            answersGrid.innerHTML = '';
+            answersGrid.style.opacity = '0';
+            answersGrid.style.pointerEvents = 'none';
+            questionText.textContent = '';
+            timerDisplay.textContent = '';
+            quizTrafficLightContainer.classList.remove('slide-in-left');
+            quizTrafficLightContainer.style.opacity = '0';
+            
+            setTimeout(() => {
+                quizTrafficLightContainer.style.opacity = '1';
+                quizTrafficLightContainer.classList.add('slide-in-left');
+                startTrafficLightSequence(currentQuestion);
+            }, 500);
+        }
+
+        function startTrafficLightSequence(currentQuestion) {
+            setLightState('red');
+            let timer = 5;
+            timerDisplay.textContent = timer;
+            play.tick();
+            intervalId = setInterval(() => {
+                timer--;
+                timerDisplay.textContent = timer;
+                if (timer > 0) play.tick();
+                if (timer <= 0) {
+                    clearInterval(intervalId);
+                    startYellowSequence(currentQuestion);
+                }
+            }, 1000);
+        }
+
+        function startYellowSequence(currentQuestion) {
+            setLightState('yellow');
+            let timer = 10;
+            timerDisplay.textContent = timer;
+            questionText.textContent = currentQuestion.question;
+            play.tick();
+
+            intervalId = setInterval(() => {
+                timer--;
+                timerDisplay.textContent = timer;
+                if (timer > 0) play.tick();
+                
+                if (timer === 5) {
+                    displayAnswers(currentQuestion);
+                }
+
+                if (timer <= 0) {
+                    clearInterval(intervalId);
+                    startGreenSequence(currentQuestion);
+                }
+            }, 1000);
+        }
+
+        function displayAnswers(currentQuestion) {
+            answersGrid.innerHTML = '';
+            currentQuestion.answers.forEach((answer, index) => {
+                const button = document.createElement('button');
+                button.className = "btn-quiz bg-white p-6 rounded-lg shadow-md text-2xl font-semibold";
+                button.textContent = answer;
+                button.onclick = () => checkAnswer(index, currentQuestion);
+                answersGrid.appendChild(button);
+            });
+            answersGrid.style.opacity = '1';
+        }
+
+        function startGreenSequence() {
+            setLightState('green');
+            timerDisplay.textContent = 'VALENDO!';
+            answersGrid.style.pointerEvents = 'auto';
+        }
+
+        function setLightState(activeColor) {
+            qLightRed.classList.toggle('red', activeColor === 'red');
+            qLightYellow.classList.toggle('yellow', activeColor === 'yellow');
+            qLightGreen.classList.toggle('green', activeColor === 'green');
+        }
+        
+        function checkAnswer(selectedIndex, currentQuestion) {
+            answersGrid.style.pointerEvents = 'none';
+            const buttons = answersGrid.querySelectorAll('button');
+            
+            buttons.forEach((button, index) => {
+                if (index === currentQuestion.correct) button.classList.add('bg-green-400', 'text-white');
+                else if (index === selectedIndex) button.classList.add('bg-red-400', 'text-white');
+            });
+
+            playCarAnimation(selectedIndex === currentQuestion.correct);
+        }
+
+        function playCarAnimation(isCorrect) {
+            streetAnimationModal.style.display = 'block';
+            playerCar.className = 'absolute bottom-[20%] w-52 h-auto'; // Reset
+            void playerCar.offsetWidth; // Trigger reflow
+
+            if (isCorrect) {
+                play.accelerate();
+                finishLine.style.opacity = '1';
+                otherCar.style.opacity = '0';
+                playerCar.classList.add('car-animation-correct');
+                setTimeout(() => {
+                    finishLine.style.transform = 'scale(0)';
+                }, 2500);
+            } else {
+                finishLine.style.opacity = '0';
+                otherCar.style.opacity = '1';
+                play.skid();
+                setTimeout(() => {
+                    playerCar.classList.add('car-animation-wrong');
+                    setTimeout(() => {
+                        play.crash();
+                        streetAnimationModal.classList.add('shake');
+                        crackOverlay.style.opacity = '1';
+                    }, 1000);
+                }, 500);
+            }
+
+            setTimeout(() => {
+                streetAnimationModal.style.display = 'none';
+                streetAnimationModal.classList.remove('shake');
+                crackOverlay.style.opacity = '0';
+                finishLine.style.transform = 'scale(1)';
+                showFeedback(isCorrect);
+            }, 3500);
+        }
+
+        function showFeedback(isCorrect) {
+            if (isCorrect) {
+                feedbackText.textContent = 'CERTO!';
+                feedbackText.className = 'text-9xl font-black text-green-400';
+                play.feedbackCorrect();
+            } else {
+                feedbackText.textContent = 'ERRADO!';
+                feedbackText.className = 'text-9xl font-black text-red-500';
+                play.feedbackWrong();
+            }
+            feedbackModal.style.display = 'flex';
+            
+            setTimeout(() => {
+                feedbackModal.style.display = 'none';
+                if (isCorrect) {
+                    scoringModal.style.display = 'flex';
+                } else {
+                    navigationModal.style.display = 'flex';
+                }
+            }, 1500);
+        }
+
+        function assignPoint(team) {
+            scores[team]++;
+            updateScores();
+            scoringModal.style.display = 'none';
+            
+            if (scores[team] >= WINNING_SCORE) {
+                showWinnerScreen(team);
+            } else {
+                navigationModal.style.display = 'flex';
+            }
+        }
+        
+        function showWinnerScreen(winningTeam) {
+            play.win();
+            startConfetti();
+            const teamName = winningTeam === 'blue' ? 'TIME AZUL' : 'TIME BRANCO';
+            const pulseClass = winningTeam === 'blue' ? 'winner-pulse-blue' : 'winner-pulse-white';
+            
+            winnerText.innerHTML = `PARABÉNS<br>O ${teamName} VENCEU!`;
+            winnerScreen.className = `absolute inset-0 z-40 flex flex-col justify-center items-center transition-colors duration-1000 ${pulseClass}`;
+            winnerScreen.style.display = 'flex';
+
+            setTimeout(() => {
+                winnerCar.style.transform = 'scale(1)';
+                winnerCarContainer.classList.add('drive-off-animation');
+                playAgainBtn.style.opacity = '1';
+            }, 500);
+        }
+
+        function updateScores() {
+            scoreBlueEl.textContent = scores.blue;
+            scoreWhiteEl.textContent = scores.white;
+        }
+
+        nextQuestionBtn.addEventListener('click', () => {
+            navigationModal.style.display = 'none';
+            loadQuestion();
+        });
+
+        exitBtn.addEventListener('click', () => {
+            quizScreen.classList.replace('fade-in', 'fade-out');
+            setTimeout(() => {
+                quizScreen.classList.add('hidden');
+                startScreen.classList.remove('hidden', 'fade-out');
+                startScreen.classList.add('fade-in');
+            }, 600);
+        });
+        
+        playAgainBtn.addEventListener('click', () => {
+            winnerScreen.style.display = 'none';
+            winnerCarContainer.classList.remove('drive-off-animation');
+            winnerCar.style.transform = 'scale(0)';
+            startQuiz();
+        });
+
+        // --- LÓGICA DA TELA INICIAL ---
+        const startLights = [document.getElementById('start-light-red'), document.getElementById('start-light-yellow'), document.getElementById('start-light-green')];
+        let currentStartLight = 0;
+        setInterval(() => {
+            startLights.forEach(light => {
+                if (light) {
+                    light.classList.remove('red', 'yellow', 'green');
+                }
+            });
+            const currentLight = startLights[currentStartLight];
+            if (currentLight) {
+                if (currentStartLight === 0) currentLight.classList.add('red');
+                if (currentStartLight === 1) currentLight.classList.add('yellow');
+                if (currentStartLight === 2) currentLight.classList.add('green');
+            }
+            currentStartLight = (currentStartLight + 1) % 3;
+        }, 1000);
+
+        // --- LÓGICA DOS CONFETES ---
+        function startConfetti() {
+            const ctx = confettiCanvas.getContext('2d');
+            confettiCanvas.width = window.innerWidth;
+            confettiCanvas.height = window.innerHeight;
+            let particles = [];
+            const colors = ["#2563eb", "#3b82f6", "#ffffff", "#e5e7eb", "#fde047"];
+
+            function Particle(x, y, color) {
+                this.x = x;
+                this.y = y;
+                this.color = color;
+                this.size = Math.random() * 6 + 4;
+                this.vx = Math.random() * 4 - 2;
+                this.vy = Math.random() * -10 - 5;
+                this.opacity = 1;
+            }
+
+            Particle.prototype.update = function() {
+                this.vy += 0.2;
+                this.x += this.vx;
+                this.y += this.vy;
+                this.opacity -= 0.01;
+            };
+
+            Particle.prototype.draw = function() {
+                ctx.globalAlpha = this.opacity;
+                ctx.fillStyle = this.color;
+                ctx.fillRect(this.x, this.y, this.size, this.size);
+            };
+
+            function createParticles() {
+                for (let i = 0; i < 25; i++) {
+                    particles.push(new Particle(Math.random() * confettiCanvas.width, -20, colors[Math.floor(Math.random() * colors.length)]));
+                }
+            }
+
+            let animationFrameId;
+            function animate() {
+                ctx.clearRect(0, 0, confettiCanvas.width, confettiCanvas.height);
+                particles = particles.filter(p => p.opacity > 0);
+                particles.forEach(p => {
+                    p.update();
+                    p.draw();
+                });
+                animationFrameId = requestAnimationFrame(animate);
+            }
+
+            createParticles();
+            setInterval(createParticles, 200);
+            animate();
+
+            setTimeout(() => {
+                cancelAnimationFrame(animationFrameId);
+                ctx.clearRect(0, 0, confettiCanvas.width, confettiCanvas.height);
+            }, 5000);
+        }
+    </script>
+</body>
+</html>
